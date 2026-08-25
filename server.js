@@ -1,31 +1,34 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─────────────────────────────────────────────
-// CONEXIÓN A LA BASE DE DATOS MYSQL
+// CONEXIÓN A LA BASE DE DATOS POSTGRESQL
 // ─────────────────────────────────────────────
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER,
+const pool = new pg.Pool({
+    host:     process.env.DB_HOST     || 'localhost',
+    user:     process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    port: parseInt(process.env.DB_PORT || '3306'),
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    dateStrings: true,
+    port:     parseInt(process.env.DB_PORT || '5432'),
+    max: 10,
+    idleTimeoutMillis: 30000,
+    // Soporte para DATABASE_URL (Railway, Render, etc.)
+    ...(process.env.DATABASE_URL && {
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+    }),
 });
 
 async function query(text, params = []) {
-    const [rows] = await pool.query(text, params);
-    return { rows };
+    const result = await pool.query(text, params);
+    return { rows: result.rows };
 }
 
 // ─────────────────────────────────────────────
@@ -76,27 +79,27 @@ app.get('/api/reservas', async (req, res) => {
         if (estado === 'todas') {
             whereClause = '';
         } else if (estado && estadosValidos.includes(estado)) {
-            whereClause = `WHERE r.estado = ?`;
+            whereClause = `WHERE r.estado = $1`;
             params = [estado];
         }
 
         const result = await query(
             `SELECT
                r.id,
-               r.cabana_id       AS cabinId,
-               r.check_in        AS checkIn,
-               r.check_out       AS checkOut,
-               r.nombre_huesped  AS guestName,
+               r.cabana_id       AS "cabinId",
+               r.check_in        AS "checkIn",
+               r.check_out       AS "checkOut",
+               r.nombre_huesped  AS "guestName",
                r.telefono        AS phone,
-               r.whatsapp_jid    AS whatsappJid,
+               r.whatsapp_jid    AS "whatsappJid",
                r.personas        AS guests,
                r.notas           AS notes,
                r.origen          AS origen,
                r.estado          AS estado,
-               r.confirmada_por  AS confirmadaPor,
-               r.confirmada_en   AS confirmadaEn,
-               r.creado_en       AS creadoEn,
-               c.nombre          AS cabinName,
+               r.confirmada_por  AS "confirmadaPor",
+               r.confirmada_en   AS "confirmadaEn",
+               r.creado_en       AS "creadoEn",
+               c.nombre          AS "cabinName",
                c.hue             AS hue
              FROM reservas r
              JOIN cabanas c ON c.id = r.cabana_id
@@ -117,11 +120,11 @@ app.get('/api/reservas/:id', async (req, res) => {
         const result = await query(
             `SELECT
                r.*,
-               c.nombre AS cabinName,
+               c.nombre AS "cabinName",
                c.hue    AS hue
              FROM reservas r
              JOIN cabanas c ON c.id = r.cabana_id
-             WHERE r.id = ?`,
+             WHERE r.id = $1`,
             [req.params.id]
         );
         if (!result.rows.length) return res.status(404).json({ error: 'Reserva no encontrada' });
@@ -148,10 +151,10 @@ app.post('/api/reservas', async (req, res) => {
         // Verificar disponibilidad (solo contra reservas confirmadas y pendientes)
         const conflicto = await query(
             `SELECT id FROM reservas
-             WHERE cabana_id = ?
+             WHERE cabana_id = $1
                AND estado IN ('pendiente', 'confirmada')
-               AND check_in  < ?
-               AND check_out > ?`,
+               AND check_in  < $2
+               AND check_out > $3`,
             [cabinId, checkOut, checkIn]
         );
 
@@ -165,15 +168,15 @@ app.post('/api/reservas', async (req, res) => {
             `INSERT INTO reservas
                (id, cabana_id, check_in, check_out, nombre_huesped, telefono,
                 personas, notas, origen, estado, confirmada_por, confirmada_en)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'web', 'confirmada', 'admin', NOW())`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'web', 'confirmada', 'admin', NOW())`,
             [id, cabinId, checkIn, checkOut, guestName.trim(), phone.trim(),
              guests || 1, notes?.trim() || null]
         );
 
         const result = await query(
-            `SELECT r.*, c.nombre AS cabinName, c.hue
+            `SELECT r.*, c.nombre AS "cabinName", c.hue
              FROM reservas r JOIN cabanas c ON c.id = r.cabana_id
-             WHERE r.id = ?`,
+             WHERE r.id = $1`,
             [id]
         );
 
@@ -196,18 +199,19 @@ app.patch('/api/reservas/:id', async (req, res) => {
     try {
         const sets = [];
         const params = [];
+        let idx = 1;
 
         if (estado) {
-            sets.push(`estado = ?`);
+            sets.push(`estado = $${idx++}`);
             params.push(estado);
             if (estado === 'confirmada') {
-                sets.push(`confirmada_por = ?`);
+                sets.push(`confirmada_por = $${idx++}`);
                 params.push(confirmadaPor || 'admin');
                 sets.push(`confirmada_en = NOW()`);
             }
         }
         if (notes !== undefined) {
-            sets.push(`notas = ?`);
+            sets.push(`notas = $${idx++}`);
             params.push(notes);
         }
 
@@ -215,18 +219,18 @@ app.patch('/api/reservas/:id', async (req, res) => {
 
         params.push(req.params.id);
         await query(
-            `UPDATE reservas SET ${sets.join(', ')} WHERE id = ?`,
+            `UPDATE reservas SET ${sets.join(', ')} WHERE id = $${idx}`,
             params
         );
 
-        const result = await query(`SELECT * FROM reservas WHERE id = ?`, [req.params.id]);
+        const result = await query(`SELECT * FROM reservas WHERE id = $1`, [req.params.id]);
         if (!result.rows.length) return res.status(404).json({ error: 'Reserva no encontrada' });
 
         // Si se confirma o cancela, marcar la notificación como resuelta
         if (estado === 'confirmada' || estado === 'cancelada') {
             await query(
                 `UPDATE notificaciones_admin SET resuelta = TRUE, resuelta_en = NOW()
-                 WHERE reserva_id = ? AND resuelta = FALSE`,
+                 WHERE reserva_id = $1 AND resuelta = FALSE`,
                 [req.params.id]
             );
         }
@@ -241,11 +245,11 @@ app.patch('/api/reservas/:id', async (req, res) => {
 // DELETE /api/reservas/:id — cancelar reserva (cambia estado a cancelada, no borra)
 app.delete('/api/reservas/:id', async (req, res) => {
     try {
-        const check = await query(`SELECT id FROM reservas WHERE id = ?`, [req.params.id]);
+        const check = await query(`SELECT id FROM reservas WHERE id = $1`, [req.params.id]);
         if (!check.rows.length) return res.status(404).json({ error: 'Reserva no encontrada' });
 
         await query(
-            `UPDATE reservas SET estado = 'cancelada' WHERE id = ?`,
+            `UPDATE reservas SET estado = 'cancelada' WHERE id = $1`,
             [req.params.id]
         );
         res.json({ ok: true, id: req.params.id });
@@ -283,7 +287,7 @@ app.get('/api/notificaciones', async (req, res) => {
 app.patch('/api/notificaciones/:id/leida', async (req, res) => {
     try {
         await query(
-            `UPDATE notificaciones_admin SET leida = TRUE WHERE id = ?`,
+            `UPDATE notificaciones_admin SET leida = TRUE WHERE id = $1`,
             [req.params.id]
         );
         res.json({ ok: true });
@@ -301,9 +305,9 @@ const PORT = parseInt(process.env.PORT || '3000');
 app.listen(PORT, async () => {
     try {
         await pool.query('SELECT 1');
-        console.log(`✅ Base de datos MySQL conectada`);
+        console.log(`✅ Base de datos PostgreSQL conectada`);
     } catch (err) {
-        console.error('❌ No se pudo conectar a la base de datos MySQL:', err.message);
+        console.error('❌ No se pudo conectar a la base de datos PostgreSQL:', err.message);
         process.exit(1);
     }
     console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
