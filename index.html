@@ -1,0 +1,50 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cabañas Guanaquero — Panel de Reservas</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.1.0/400.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.1.0/700.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.1.0/800.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.1.0/900.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <div class="brand"><span class="logo"> 🐚</span><div>Cabañas Guanaquero<small>Panel de reservas</small></div></div>
+    <div class="hspace"></div>
+    <div class="fsz" title="Tamaño de letra">
+      <span class="lbl">LETRA</span>
+      <button data-act="fs-down" aria-label="Letra más pequeña">A−</button>
+      <button data-act="fs-up" aria-label="Letra más grande">A＋</button>
+    </div>
+    <button id="gchip" data-act="gcal-chip"></button>
+  </div>
+</header>
+
+<nav>
+  <button class="tab" data-act="nav" data-view="inicio"><span class="ico">🏠</span> Inicio</button>
+  <button class="tab" data-act="nav" data-view="nueva"><span class="ico">➕</span> Nueva reserva</button>
+  <button class="tab" data-act="nav" data-view="reservas"><span class="ico">📋</span> Reservas</button>
+  <button class="tab" data-act="nav" data-view="calendario"><span class="ico">📅</span> Calendario</button>
+  <button class="tab" data-act="nav" data-view="pendientes"><span class="ico">🔔</span> Pendientes</button>
+</nav>
+
+<main>
+  <section class="view" id="view-inicio"></section>
+  <section class="view" id="view-nueva"></section>
+  <section class="view" id="view-reservas"></section>
+  <section class="view" id="view-calendario"></section>
+  <section class="view" id="view-pendientes"></section>
+</main>
+
+<footer>Cabañas Guanaquero · Hecho con ❤ para administrar sus reservas fácilmente</footer>
+<div id="modal-root"></div>
+<div id="toast" role="status"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
