@@ -22,9 +22,11 @@
       <button data-act="fs-up" aria-label="Letra más grande">A＋</button>
     </div>
     <button id="gchip" data-act="gcal-chip"></button>
+    <button id="logout-btn" data-act="logout" title="Cerrar sesión">🚪 Salir</button>
   </div>
 </header>
 
+<div id="app">
 <nav>
   <button class="tab" data-act="nav" data-view="inicio"><span class="ico">🏠</span> Inicio</button>
   <button class="tab" data-act="nav" data-view="nueva"><span class="ico">➕</span> Nueva reserva</button>
@@ -33,7 +35,7 @@
   <button class="tab" data-act="nav" data-view="pendientes"><span class="ico">🔔</span> Pendientes</button>
 </nav>
 
-<main>
+<main id="app">
   <section class="view" id="view-inicio"></section>
   <section class="view" id="view-nueva"></section>
   <section class="view" id="view-reservas"></section>
@@ -42,6 +44,7 @@
 </main>
 
 <footer>Cabañas Guanaquero · Hecho con ❤ para administrar sus reservas fácilmente</footer>
+</div>
 <div id="modal-root"></div>
 <div id="toast" role="status"></div>
 

@@ -31,14 +31,92 @@ let toastTimer = null;
 let confirmCallback = null;
 
 // ─────────────────────────────────────────────
+// AUTENTICACIÓN
+// ─────────────────────────────────────────────
+
+const LS_TOKEN = 'cb_auth_token';
+
+function getToken() { return localStorage.getItem(LS_TOKEN); }
+function setToken(t) { localStorage.setItem(LS_TOKEN, t); }
+function clearToken() { localStorage.removeItem(LS_TOKEN); }
+
+async function doLogin(username, password) {
+    const res = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `Error ${res.status}`);
+    setToken(body.token);
+}
+
+function renderLoginScreen(errorMsg = '') {
+    document.getElementById('app').style.display = 'none';
+    let loginEl = document.getElementById('login-screen');
+    if (!loginEl) {
+        loginEl = document.createElement('div');
+        loginEl.id = 'login-screen';
+        document.body.appendChild(loginEl);
+    }
+    loginEl.style.display = 'flex';
+    loginEl.innerHTML = `
+      <div class="login-box">
+        <div style="font-size:2.5rem;margin-bottom:.5rem">🏡</div>
+        <h2 style="margin-bottom:1.5rem;font-size:1.4rem">Cabañas Guanaquero</h2>
+        ${errorMsg ? `<div class="login-error">${escapeHTML(errorMsg)}</div>` : ''}
+        <form id="login-form">
+          <label for="l-user">Usuario</label>
+          <input type="text" id="l-user" placeholder="admin" autocomplete="username" required>
+          <label for="l-pass">Contraseña</label>
+          <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password" required>
+          <button class="btn primary" type="submit" style="width:100%;margin-top:.5rem">Iniciar sesión</button>
+        </form>
+      </div>`;
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = loginEl.querySelector('button[type=submit]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Entrando…';
+        try {
+            await doLogin(
+                document.getElementById('l-user').value.trim(),
+                document.getElementById('l-pass').value
+            );
+            loginEl.style.display = 'none';
+            document.getElementById('app').style.display = '';
+            init();
+        } catch (err) {
+            renderLoginScreen(err.message);
+        }
+    });
+}
+
+function doLogout() {
+    clearToken();
+    document.getElementById('app').style.display = 'none';
+    renderLoginScreen();
+}
+
+// ─────────────────────────────────────────────
 // API — HELPERS
 // ─────────────────────────────────────────────
 
 async function apiFetch(path, options = {}) {
+    const token = getToken();
     const res = await fetch(`${API}${path}`, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+        },
         ...options,
     });
+    if (res.status === 401) {
+        clearToken();
+        renderLoginScreen('Sesión expirada. Por favor inicia sesión de nuevo.');
+        throw new Error('Sesión expirada');
+    }
     if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Error ${res.status}`);
@@ -848,6 +926,7 @@ function handleGlobalClick(event) {
         case 'fs-up':         handleFontSize(act); break;
         case 'gcal-chip':     handleCalendarChip(); break;
         case 'connect-go':    handleConnectGoogle(); break;
+        case 'logout':        doLogout(); break;
         case 'quick-res':     handleQuickReserve(btn.dataset.cabin, btn.dataset.date); break;
         case 'pick-cabin':    wiz.cabinId = Number(btn.dataset.id); renderWizardCabins(); break;
         case 'wiz-next1':     if (wiz.cabinId) { wiz.step = 2; renderWizard(); } break;
@@ -907,6 +986,12 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 // ─────────────────────────────────────────────
 
 async function init() {
+    // Si no hay token, mostrar login en vez de cargar datos
+    if (!getToken()) {
+        renderLoginScreen();
+        return;
+    }
+
     // Tamaño de letra guardado
     const storedFs = localStorage.getItem(LS_FS);
     document.documentElement.style.fontSize = ['17px', '19px', '22px'][storedFs == null ? 1 : Number(storedFs)];

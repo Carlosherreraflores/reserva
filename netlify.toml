@@ -1,9 +1,0 @@
-[build]
-  functions = "netlify/functions"
-
-# Redirigir todas las rutas /api/* a la función serverless
-[[redirects]]
-  from   = "/api/*"
-  to     = "/.netlify/functions/api"
-  status = 200
-  force  = true

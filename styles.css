@@ -181,3 +181,44 @@ footer{max-width:1180px;margin:2rem auto 0;padding:1rem;text-align:center;color:
   .hero img{height:170px}
   .tab{flex:1;justify-content:center;padding:.4rem .6rem}
 }
+
+/* ─────────────────────────────────────────────
+   LOGIN SCREEN
+   ───────────────────────────────────────────── */
+#login-screen{
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:linear-gradient(135deg,var(--blue-d) 0%,#1a6e45 100%);
+  align-items:center;justify-content:center;padding:1rem;
+}
+.login-box{
+  background:var(--card);border-radius:20px;padding:2.2rem 2rem;
+  width:100%;max-width:380px;text-align:center;
+  box-shadow:0 12px 48px rgba(0,0,0,.35);
+}
+.login-box h2{color:var(--ink);font-weight:900}
+.login-box label{
+  display:block;text-align:left;font-size:.88rem;font-weight:800;
+  color:var(--muted);margin-bottom:.3rem;margin-top:1rem;
+}
+.login-box input{
+  width:100%;border:1.5px solid var(--line);border-radius:10px;
+  padding:.7rem .9rem;font-size:1rem;font-family:inherit;
+  color:var(--ink);background:#fafbfc;transition:.15s;
+}
+.login-box input:focus{outline:none;border-color:var(--blue);background:#fff}
+.login-error{
+  background:#fdecea;border:1.5px solid #f5c6c2;border-radius:10px;
+  padding:.6rem .9rem;font-size:.9rem;font-weight:700;color:var(--red);
+  margin-bottom:.6rem;
+}
+
+/* ─────────────────────────────────────────────
+   BOTÓN LOGOUT EN HEADER
+   ───────────────────────────────────────────── */
+#logout-btn{
+  display:flex;align-items:center;gap:.4rem;
+  background:rgba(255,255,255,.13);border:1.5px solid rgba(255,255,255,.35);
+  color:#fff;border-radius:12px;padding:.4rem .9rem;font-size:.88rem;
+  font-weight:800;cursor:pointer;transition:.15s;min-height:40px;
+}
+#logout-btn:hover{background:rgba(255,255,255,.22)}
