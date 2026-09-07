@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // CONEXIÓN A LA BASE DE DATOS POSTGRESQL
 // ─────────────────────────────────────────────
 
-const isLocal = !process.env.DATABASE_URL && (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === '127.0.0.1' || !process.env.DB_HOST);
+const isLocal = !process.env.DATABASE_URL && (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === '127.0.0.1' || process.env.DB_HOST === 'db' || !process.env.DB_HOST || process.env.DB_SSL === 'false');
 const ssl = isLocal ? false : { rejectUnauthorized: false };
 
 const pool = new pg.Pool({
