@@ -1,3 +1,6 @@
 node_modules/
 .env
 *.log
+generar-hash.mjs
+database_mysql.sql
+database.sql
