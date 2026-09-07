@@ -4,6 +4,8 @@ import cors from 'cors';
 import pg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // CONEXIÓN A LA BASE DE DATOS POSTGRESQL
 // ─────────────────────────────────────────────
 
-const isLocal = !process.env.DATABASE_URL && (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === '127.0.0.1' || !process.env.DB_HOST);
+const isLocal = !process.env.DATABASE_URL && (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === '127.0.0.1' || process.env.DB_HOST === 'db' || !process.env.DB_HOST || process.env.DB_SSL === 'false');
 const ssl = isLocal ? false : { rejectUnauthorized: false };
 
 const pool = new pg.Pool({
@@ -46,11 +48,57 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 // ─────────────────────────────────────────────
+// AUTENTICACIÓN — JWT
+// ─────────────────────────────────────────────
+
+// POST /api/auth/login — obtener token JWT
+app.post('/api/auth/login', async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+    }
+
+    const validUser = username === process.env.ADMIN_USERNAME;
+    const validPass = process.env.ADMIN_PASSWORD_HASH
+        ? await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH)
+        : false;
+
+    if (!validUser || !validPass) {
+        return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
+
+    const token = jwt.sign(
+        { username },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.json({ token, expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+});
+
+// Middleware de autenticación JWT
+function requireAuth(req, res, next) {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token de autenticación requerido' });
+    }
+
+    try {
+        const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+        req.user = payload;
+        next();
+    } catch {
+        return res.status(401).json({ error: 'Token inválido o expirado' });
+    }
+}
+
+// ─────────────────────────────────────────────
 // ENDPOINTS — CABAÑAS
 // ─────────────────────────────────────────────
 
 // GET /api/cabanas — lista todas las cabañas activas
-app.get('/api/cabanas', async (req, res) => {
+app.get('/api/cabanas', requireAuth, async (req, res) => {
     try {
         const result = await query(
             `SELECT id, nombre, capacidad, hue, activa
@@ -71,7 +119,7 @@ app.get('/api/cabanas', async (req, res) => {
 
 // GET /api/reservas — lista reservas (opcionalmente filtradas por estado)
 // Query params: estado=confirmada|pendiente|cancelada|completada|todas
-app.get('/api/reservas', async (req, res) => {
+app.get('/api/reservas', requireAuth, async (req, res) => {
     try {
         const { estado } = req.query;
         const estadosValidos = ['pendiente', 'confirmada', 'cancelada', 'completada'];
@@ -118,7 +166,7 @@ app.get('/api/reservas', async (req, res) => {
 });
 
 // GET /api/reservas/:id — detalle de una reserva
-app.get('/api/reservas/:id', async (req, res) => {
+app.get('/api/reservas/:id', requireAuth, async (req, res) => {
     try {
         const result = await query(
             `SELECT
@@ -139,7 +187,7 @@ app.get('/api/reservas/:id', async (req, res) => {
 });
 
 // POST /api/reservas — crear nueva reserva (desde el panel web, estado confirmada directo)
-app.post('/api/reservas', async (req, res) => {
+app.post('/api/reservas', requireAuth, async (req, res) => {
     const { cabinId, checkIn, checkOut, guestName, phone, guests, notes } = req.body;
 
     if (!cabinId || !checkIn || !checkOut || !guestName || !phone) {
@@ -191,7 +239,7 @@ app.post('/api/reservas', async (req, res) => {
 });
 
 // PATCH /api/reservas/:id — actualizar estado o datos de una reserva
-app.patch('/api/reservas/:id', async (req, res) => {
+app.patch('/api/reservas/:id', requireAuth, async (req, res) => {
     const { estado, confirmadaPor, notes } = req.body;
     const estadosValidos = ['pendiente', 'confirmada', 'cancelada', 'completada'];
 
@@ -246,7 +294,7 @@ app.patch('/api/reservas/:id', async (req, res) => {
 });
 
 // DELETE /api/reservas/:id — cancelar reserva (cambia estado a cancelada, no borra)
-app.delete('/api/reservas/:id', async (req, res) => {
+app.delete('/api/reservas/:id', requireAuth, async (req, res) => {
     try {
         const check = await query(`SELECT id FROM reservas WHERE id = $1`, [req.params.id]);
         if (!check.rows.length) return res.status(404).json({ error: 'Reserva no encontrada' });
@@ -267,7 +315,7 @@ app.delete('/api/reservas/:id', async (req, res) => {
 // ─────────────────────────────────────────────
 
 // GET /api/notificaciones — notificaciones sin resolver
-app.get('/api/notificaciones', async (req, res) => {
+app.get('/api/notificaciones', requireAuth, async (req, res) => {
     try {
         const result = await query(
             `SELECT n.id, n.tipo, n.reserva_id, n.whatsapp_jid, n.mensaje,
@@ -287,7 +335,7 @@ app.get('/api/notificaciones', async (req, res) => {
 });
 
 // PATCH /api/notificaciones/:id/leida — marcar como leída
-app.patch('/api/notificaciones/:id/leida', async (req, res) => {
+app.patch('/api/notificaciones/:id/leida', requireAuth, async (req, res) => {
     try {
         await query(
             `UPDATE notificaciones_admin SET leida = TRUE WHERE id = $1`,
